@@ -1,5 +1,8 @@
+import jwt
+
 from datetime import datetime
-from app import db
+from time import time
+from app import app, db
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from hashlib import md5
@@ -22,7 +25,6 @@ class User(UserMixin, db.Model):
         primaryjoin=(followers.c.follower_id == id),
         secondaryjoin=(followers.c.followed_id == id),
         backref=db.backref('followers', lazy='dynamic'), lazy='dynamic')
-    
 
     def __repr__(self):
         return f'<User {self.username}>'
@@ -32,6 +34,19 @@ class User(UserMixin, db.Model):
     
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def get_password_reset_token(self, expires_in=600 ): # 600 seconds is 10 minutes
+        return jwt.encode(
+            {'password_reset': self.id, 'exp': time() + expires_in},
+            app.config['SECRET_KEY'], algorithm='HS256').decode('utf-8')
+
+    @staticmethod
+    def verify_password_reset_token(token):
+        try:
+            id = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])['password_reset']
+        except:
+            return
+        return User.query.get(id)
 
     def avatar(self, size):
         digest = md5(self.email.lower().encode('utf-8')).hexdigest()
